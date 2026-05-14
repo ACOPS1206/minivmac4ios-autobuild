@@ -1,0 +1,42 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build IPA
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Default Scheme
+        run: |
+          scheme_list=$(xcodebuild -list -json | tr -d "\n")
+          default=$(echo $scheme_list | ruby -e "require 'json'; puts JSON.parse(STDIN.gets)['project']['targets'][0]")
+          echo "SCHEME=$default" >> $GITHUB_ENV
+          echo "Using default scheme: $default"
+
+      - name: Build and Archive
+        run: |
+          xcodebuild archive \
+            -scheme "${{ env.SCHEME }}" \
+            -archivePath ./build/MiniVMac.xcarchive \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Create IPA (Unsigned)
+        run: |
+          mkdir -p Payload
+          cp -r ./build/MiniVMac.xcarchive/Products/Applications/*.app ./Payload/
+          zip -r MiniVMac.ipa Payload
+          
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiniVMac-IPA
+          path: MiniVMac.ipa
